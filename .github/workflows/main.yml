@@ -1,0 +1,54 @@
+name: CI-CD
+
+on:
+  push:
+    branches: [ main ]
+
+  workflow_dispatch:
+
+jobs:
+  CI:
+    # Sistema do ambiente de produção com UBUNTU
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      
+      - name: Docker Login
+        uses: docker/login-action@v1.10.0
+        with:
+          username: ${{ secrets.DOCKER_HUB_USER }}
+          password: ${{ secrets.DOCKER_HUB_PASSWORD }}
+       
+      - name: Docker Build and Push
+        uses: docker/build-push-action@v2.7.0
+        with:
+          context: ./src
+          file: ./src/Dockerfile
+          push: true
+          tags: |
+            desenvolvimentovitoria/rotten-potatoes:latest
+            desenvolvimentovitoria/rotten-potatoes:v${{ github.run_number }}
+        
+  CD:
+    # Precisa que o CI termine antes de executar
+    needs: [CI]
+    
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v2
+      
+      - name: Kubernetes set context
+        uses: Azure/k8s-set-context@v1.1
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBECONFIG_DIGITAL_OCEAN }}
+
+      - name: Deploy to Kubernetes cluster
+        uses: Azure/k8s-deploy@v1.3
+        with:
+          manifests: |
+            ./k8s/deployment.yaml
+          images: |
+            desenvolvimentovitoria/rotten-potatoes:latest
